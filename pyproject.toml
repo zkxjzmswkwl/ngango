@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "ngango"
+version = "0.1.0"
+description = "Generate frontend code. That way you don't need to write so much frontend code. It's good."
+authors = ["zkxjzmswkwl"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
