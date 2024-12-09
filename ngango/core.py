@@ -50,12 +50,14 @@ class DjangoView:
         self,
         name: str,
         parent_class: str,
+        queryset_model: str,
         line_number: int,
         methods=None,
         decorators=None,
     ):
         self._name = name
         self._parent_class = parent_class
+        self._queryset_model = queryset_model
         self._line_number = line_number
         self._methods = methods or []
         self._decorators = decorators or []
@@ -67,6 +69,10 @@ class DjangoView:
     @property
     def parent_class(self) -> str:
         return self._parent_class
+
+    @property
+    def queryset_model(self) -> str:
+        return self._queryset_model
 
     @property
     def line_number(self) -> int:
@@ -106,9 +112,11 @@ class DjangoView:
     @staticmethod
     def from_ast(node: ast.ClassDef):
         if not any(
-            (isinstance(base, ast.Name) and base.id == "APIView")
-            or (isinstance(base, ast.Attribute) and base.attr == "APIView")
-            for base in node.bases
+            (isinstance(base, ast.Name) and base.id == "APIView") or
+            (isinstance(base, ast.Name) and base.id == "ModelViewSet") or
+            (isinstance(base, ast.Name) and base.id == "GenericViewSet") or
+            (isinstance(base, ast.Attribute) and base.attr == "APIView") for
+            base in node.bases
         ):
             return None
 
@@ -123,11 +131,27 @@ class DjangoView:
                 decorators.append(child.func.id)
 
         if isinstance(node.bases[0], ast.Name):
-            view = DjangoView(
-                node.name, node.bases[0].id, node.lineno, decorators=decorators
-            )
-            view.scan_methods(node)
-            return view
+            for child in node.body:
+                if not (
+                    isinstance(child, ast.Assign) and 
+                    isinstance(child.value, ast.Call) and 
+                    isinstance(child.value.func, ast.Attribute)
+                ):
+                    continue
+
+                func_value = child.value.func.value
+                if (
+                    isinstance(func_value, ast.Attribute) and
+                    isinstance(func_value.value, ast.Name)
+                ):
+                    model_name = func_value.value.id 
+                    view = DjangoView(node.name,
+                                      node.bases[0].id,
+                                      model_name,
+                                      node.lineno,
+                                      decorators=decorators)
+                    view.scan_methods(node)
+                    return view
 
     def __str__(self):
         return f"{self._name}({self._parent_class})"
@@ -390,7 +414,5 @@ class DjangoProject:
 
         # ! Scan for endpoints
         [app.scan_views(self._views_filename) for app in self._apps]
-
-        # ! Link endpoints -> urls
 
         # ! Scan for serializers (fuck)
