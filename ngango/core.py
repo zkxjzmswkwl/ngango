@@ -40,6 +40,9 @@ class DjangoViewMethod:
     def decorators(self) -> List:
         return self._decorators
 
+    def __str__(self):
+        return f"{self._name}({', '.join(self.arguments)})"
+
 
 class DjangoView:
 
@@ -77,9 +80,6 @@ class DjangoView:
     def decorators(self) -> List:
         return self._decorators
 
-    def __str__(self):
-        return f"{self._name} | {self._methods}"
-
     def scan_methods(self, node: ast.ClassDef):
         for child in node.body:
             if isinstance(child, ast.FunctionDef):
@@ -87,22 +87,29 @@ class DjangoView:
                 arguments = [arg.arg for arg in child.args.args]
                 status_codes = []
 
+                # TODO: Clean up over indentation w/ sentinels. Dec.9.24
                 for stmt in ast.walk(child):
                     if isinstance(stmt, ast.Assign) and isinstance(
-                            stmt.value, ast.Constant):
-                        if (hasattr(stmt.targets[0], "id")
-                                and stmt.targets[0].id == "status"):
+                        stmt.value, ast.Constant
+                    ):
+                        if (
+                            hasattr(stmt.targets[0], "id")
+                            and stmt.targets[0].id == "status"
+                        ):
                             status_codes.append(stmt.value.value)
 
-                method = DjangoViewMethod(method_name, arguments, child.lineno,
-                                          status_codes)
+                method = DjangoViewMethod(
+                    method_name, arguments, child.lineno, status_codes
+                )
                 self._methods.append(method)
 
     @staticmethod
     def from_ast(node: ast.ClassDef):
-        if not any((isinstance(base, ast.Name) and base.id == "APIView") or
-                   (isinstance(base, ast.Attribute) and base.attr == "APIView")
-                   for base in node.bases):
+        if not any(
+            (isinstance(base, ast.Name) and base.id == "APIView")
+            or (isinstance(base, ast.Attribute) and base.attr == "APIView")
+            for base in node.bases
+        ):
             return None
 
         # Unused for now
@@ -116,12 +123,14 @@ class DjangoView:
                 decorators.append(child.func.id)
 
         if isinstance(node.bases[0], ast.Name):
-            view = DjangoView(node.name,
-                              node.bases[0].id,
-                              node.lineno,
-                              decorators=decorators)
+            view = DjangoView(
+                node.name, node.bases[0].id, node.lineno, decorators=decorators
+            )
             view.scan_methods(node)
             return view
+
+    def __str__(self):
+        return f"{self._name}({self._parent_class})"
 
 
 class DjangoModelField:
@@ -130,6 +139,8 @@ class DjangoModelField:
         self._name = name
         self._field_type = field_type
         self._params = params
+        self._nullable = self._check_bool_arg_val("null")
+        self._blankable = self._check_bool_arg_val("blank")
 
     @property
     def name(self) -> str:
@@ -143,6 +154,20 @@ class DjangoModelField:
     def params(self) -> List:
         return self._params
 
+    @property
+    def nullable(self) -> bool:
+        return self._nullable
+
+    @property
+    def blankable(self) -> bool:
+        return self._blankable
+
+    def _check_bool_arg_val(self, keyword: str) -> bool:
+        arg = self._params.get(keyword, None)
+        if arg is None:
+            return False
+        return "True" in arg 
+
     @staticmethod
     def from_line(line: str) -> Optional["DjangoModelField"]:
         """
@@ -150,10 +175,13 @@ class DjangoModelField:
         """
 
         def is_multiline(stripped_line: str) -> bool:
-            return (stripped_line.endswith("(") or stripped_line.endswith("[")
-                    or stripped_line.endswith("{")
-                    or stripped_line.endswith(",")
-                    or stripped_line.endswith("\\"))
+            return (
+                stripped_line.endswith("(")
+                or stripped_line.endswith("[")
+                or stripped_line.endswith("{")
+                or stripped_line.endswith(",")
+                or stripped_line.endswith("\\")
+            )
 
         def is_comment(line: str) -> bool:
             return line.startswith("#") or line.startswith('"""')
@@ -166,15 +194,15 @@ class DjangoModelField:
 
         # * multiline = is_multiline(line.strip())
         # TODO: Let's only handle non multiline for now. Feeling a bit lazy.
-        # TODO: Also, again, I don't like the hacky splitting.
-        # * Very error prone. Revisit.
+        # TODO: Use AST.
         name = stripped_line.split("=")[0]
         field_type = stripped_line.split("=")[1].split("(")[0].strip()
         params = stripped_line.split("(")[1].split(")")[0].split(",")
+        print(params)
         return DjangoModelField(name, field_type, params)
 
     def __str__(self):
-        return f"{self._name} | {self._field_type} | {self._params}"
+        return f"{self._name}: {self._field_type}({', '.join(self._params)})"
 
 
 class DjangoModel:
@@ -186,14 +214,14 @@ class DjangoModel:
         fields: List[DjangoModelField],
         methods=None,
         properties=None,
-        inherits_from="models.Model",
+        parent_class="models.Model",
     ):
         self._name = name
         self._line_number = line_number
         self._fields = fields
         self._methods = methods
         self._properties = properties
-        self._inherits_from = inherits_from
+        self._parent_class = parent_class
 
     @property
     def name(self) -> str:
@@ -204,8 +232,7 @@ class DjangoModel:
         return self._line_number
 
     @property
-    def fields(self) -> List:
-        # TODO: -> List[Field]
+    def fields(self) -> List[DjangoModelField]:
         return self._fields
 
     @property
@@ -217,11 +244,11 @@ class DjangoModel:
         return self._properties
 
     @property
-    def inherits_from(self) -> str:
-        return self._inherits_from
+    def parent_class(self) -> str:
+        return self._parent_class
 
     def __str__(self):
-        return f"{self._name} | {self._fields}"
+        return f"{self._name}({self._parent_class})"
 
 
 class DjangoApp:
@@ -263,25 +290,40 @@ class DjangoApp:
         """
         return self._views
 
+    def _validate_base_class(self, base) -> bool:
+        """
+        TODO: Off-load these to configuration
+
+        ? NOTE: It's annoying that every linter complains if I align the `or`s.
+        """
+        return (
+            (isinstance(base, ast.Name) and base.id == "models.Model")
+            or (isinstance(base, ast.Name) and base.id == "AbstractBaseUser")
+            or (isinstance(base, ast.Name) and base.id == "AbstractUser")
+            or (isinstance(base, ast.Attribute) and base.attr == "Model")
+        )
+
     def _extract_models(self, tree):
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
 
-            if any(
-                (isinstance(base, ast.Name) and base.id == "models.Model") or (
-                    isinstance(base, ast.Attribute) and base.attr == "Model")
-                    for base in node.bases):
+            if any(self._validate_base_class(base) for base in node.bases):
                 fields = [
-                    DjangoModelField(child.targets[0].id,
-                                     child.value.func.attr)
-                    for child in node.body if isinstance(child, ast.Assign)
+                    DjangoModelField(
+                        child.targets[0].id,
+                        child.value.func.attr,
+                        {
+                            kw.arg: ast.dump(kw.value) for
+                            kw in child.value.keywords
+                        },
+                    )
+                    for child in node.body
+                    if isinstance(child, ast.Assign)
                     and isinstance(child.value, ast.Call)
                     and hasattr(child.value.func, "attr")
                 ]
-                self._models.append(DjangoModel(node.name,
-                                                node.lineno,
-                                                fields))
+                self._models.append(DjangoModel(node.name, node.lineno, fields))
 
     def _extract_views(self, tree: ast.Module):
         for node in ast.walk(tree):

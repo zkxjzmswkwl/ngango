@@ -1,5 +1,6 @@
 import argparse
 from core import DjangoProject
+from tsgen.translator import ModelTranslator
 from tsgen.typescript import ClassNode
 
 # -n "project-name" --path "path_to_project_root" -v "views"
@@ -7,13 +8,11 @@ from tsgen.typescript import ClassNode
 
 def main():
     p = argparse.ArgumentParser(
-        description="Generate frontend using a DRF project as a schema.")
+        description="Generate frontend using a DRF project as a schema."
+    )
 
     p.add_argument("-n", "--name", type=str, help="The Django project name")
-    p.add_argument("-p",
-                   "--path",
-                   type=str,
-                   help="The path to the Django project")
+    p.add_argument("-p", "--path", type=str, help="The path to the Django project")
     p.add_argument(
         "-v",
         "--viewsfilename",
@@ -26,27 +25,14 @@ def main():
     project.propegate_apps()
 
     for app in project.apps:
-        print(app.name)
-        print("Views")
-        for view in app.views:
-            print(f"\t{view.name}")
-            for method in view.methods:
-                print(f"\t\t{method.name}")
-
-        print("Models")
+        to_write = ""
         for model in app.models:
-            print(f"\t{model.name}")
-            for field in model.fields:
-                print(f"\t\t{field.name}")
+            translator = ModelTranslator(model)
+            to_write += translator.translate() + "\n\n"
 
-    user_service = ClassNode("UserService") \
-        .add_decorator("Injectable()") \
-        .add_property("users", "User[]", "private", "[]") \
-        .add_method("addUser", "void", [("user", "User")], "this.users.push(user);") \
-        .add_method("getUserById", "User | undefined", [("id", "number")], "return this.users.find(user => user.id === id);")
-
-    with open("../tsgen-output/user.service.ts", "w", encoding="utf8") as f:
-        f.write(user_service.to_ts())
+        file_path = f"../tsgen-output/{app.name.lower()}.struct.ts"
+        with open(file_path, "w", encoding="utf8") as f:
+            f.write(to_write)
 
 
 if __name__ == "__main__":
