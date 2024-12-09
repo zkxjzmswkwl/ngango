@@ -1,5 +1,5 @@
 import os
-import re
+import ast
 import file_service as fs
 from typing import List, Optional
 
@@ -236,103 +236,74 @@ class DjangoApp:
     def views(self) -> List[DjangoView]:
         return self._views
 
-    def _extract_models(self, content: List[str]):
-        models = []
-        for i, line in enumerate(content):
-            if not re.match(r"^\s*class\s+(\w+)\(", line):
+    def _extract_models(self, tree):
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
                 continue
 
-            model_name = re.match(r"^\s*class\s+(\w+)\(", line).group(1)
-            print(f"Class at line {i} with name {model_name}")
+            if any(
+                (isinstance(base, ast.Name) and base.id == "models.Model") or
+                (isinstance(base, ast.Attribute) and base.attr == "Model")
+                for base in node.bases
+            ):
+                fields = [
+                    DjangoModelField(
+                        child.targets[0].id,
+                        child.value.func.attr
+                    )
+                    for child in node.body
+                    if isinstance(child, ast.Assign) and
+                    isinstance(child.value, ast.Call) and
+                    hasattr(child.value.func, "attr")
+                ]
+                self._models.append(DjangoModel(node.name, node.lineno, fields))
 
-            model_fields = self._parse_model_fields(content, i + 1)
-            if not model_fields:
-                print(f"[!] No fields found for model {model_name}")
-                continue
+    def _extract_views(self, tree):
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and any(
+                isinstance(base, ast.Name) and base.id == "APIView"
+                for base in node.bases
+            ):
+                methods = [
+                    DjangoViewMethod(
+                        m.name,
+                        [a.arg for a in m.args.args],
+                        m.lineno,
+                        [
+                            stmt.value.value
+                            for stmt in m.body
+                            if isinstance(stmt, ast.Assign)
+                            and isinstance(stmt.value, ast.Constant)
+                            and hasattr(stmt.targets[0], "id")
+                            and stmt.targets[0].id == "status"
+                        ],
+                    )
+                    for m in node.body
+                    if isinstance(m, ast.FunctionDef)
+                ]
+                self._views.append(
+                    DjangoView(
+                        node.name,
+                        node.bases[0].id,
+                        node.lineno,
+                        methods
+                    )
+                )
 
-            models.append(DjangoModel(model_name, i, model_fields))
-        return models
-
-    def _parse_model_fields(self, content: List[str], start_line: int):
-        fields = []
-        for i in range(start_line, len(content)):
-            line = content[i]
-            if not line.strip():
-                continue
-            if line.lstrip() == line:
-                break
-            if model_field := DjangoModelField.from_line(line):
-                fields.append(model_field)
-        return fields
+    def _scan_file(self, filename, extractor):
+        full_path = os.path.join(self._path, filename)
+        try:
+            with open(full_path) as f:
+                tree = ast.parse(f.read())
+                extractor(tree)
+        except FileNotFoundError:
+            print(f"[!] {filename} not found for {self._name}")
 
     def scan_models(self):
-        full_path = f"{self.path}/models.py"
-        print(f"Scanning {full_path}")
+        self._scan_file("models.py", self._extract_models)
 
-        try:
-            with open(full_path, "r") as file:
-                content = file.readlines()
-        except FileNotFoundError:
-            print(f"[!] No models file found for {self.name}")
-            return
-        except Exception as e:
-            print(f"[!] Failed to read models file: {e}")
-            return
-
-        models = self._extract_models(content)
-        if not models:
-            print("[!] No models found")
-            return
-
-        self._models.extend(models)
-
-    def _extract_views(self, content: List[str]) -> List[DjangoView]:
-        views = []
-        class_pattern = re.compile(r"^\s*class\s+(\w+)\((\w+)\):")
-        for i, line in enumerate(content):
-            match = class_pattern.match(line)
-            if match:
-                view_name, parent_class = match.groups()
-                if parent_class != "APIView":
-                    continue
-
-                print(
-                    f"Found view '{view_name}' at line {i} inheriting from {parent_class}"
-                )
-                view = DjangoView(view_name, parent_class, i)
-                view.scan_methods(content, i + 1)
-                views.append(view)
-        return views
-
-    def scan_views(self, views_filename: str):
-        full_path = f"{self.path}/{views_filename}.py"
-        print(f"Scanning {full_path}")
-
-        try:
-            with open(full_path, "r") as file:
-                content = file.readlines()
-        except FileNotFoundError:
-            print(f"[!] No views file found for {self.name}")
-            return
-        except Exception as e:
-            print(f"[!] Failed to read views file: {e}")
-            return
-
-        views = self._extract_views(content)
-        self._views.extend(views)
-
-        # check views.py as well. For funzies.
-        if views_filename != "views":
-            default_path = full_path.replace(views_filename, "views")
-            try:
-                with open(default_path, "r") as file:
-                    default_content = file.readlines()
-                    views = self._extract_views(default_content)
-                    self._views.extend(views)
-            except FileNotFoundError:
-                pass
-            except Exception as e:
-                print(f"[!] Failed to read default views file: {e}")
+    def scan_views(self, views_filename):
+        self._scan_file(f"{views_filename}.py", self._extract_views)
 
 
 class DjangoProject:
