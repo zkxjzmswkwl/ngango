@@ -53,7 +53,7 @@ class DjangoView:
         self._parent_class = parent_class
         self._line_number = line_number
         self._methods = methods or []
-        self._decorators = decorators
+        self._decorators = decorators or []
 
     @property
     def name(self) -> str:
@@ -78,38 +78,45 @@ class DjangoView:
     def __str__(self):
         return f"{self._name} | {self._methods}"
 
-    def scan_methods(self, content: List[str], start_index: int):
-        for i in range(start_index, len(content)):
-            focused_line = content[i]
-            possible_status_codes = []
+    def scan_methods(self, node: ast.ClassDef):
+        for child in node.body:
+            if isinstance(child, ast.FunctionDef):
+                method_name = child.name
+                arguments = [arg.arg for arg in child.args.args]
+                status_codes = []
 
-            if "status=" in focused_line:
-                if focused_line.endswith(","):
-                    code_str = focused_line.split("status=")[1].split(",")[0].strip()
-                else:
-                    code_str = focused_line.split("status=")[1].split(")")[0].strip()
+                for stmt in ast.walk(child):
+                    if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant):
+                        if hasattr(stmt.targets[0], "id") and stmt.targets[0].id == "status":
+                            status_codes.append(stmt.value.value)
 
-                code = int("".join(filter(str.isdigit, code_str)))
-                possible_status_codes.append(code)
+                method = DjangoViewMethod(
+                    method_name, arguments, child.lineno, status_codes
+                )
+                self._methods.append(method)
 
-            indent = len(focused_line) - len(focused_line.lstrip())
-            if indent == 0:
-                continue
+    @staticmethod
+    def from_ast(node: ast.ClassDef):
+        if not any(
+            (isinstance(base, ast.Name) and base.id == "APIView") or
+            (isinstance(base, ast.Attribute) and base.attr == "APIView")
+            for base in node.bases
+        ):
+            return None
 
-            if "def" not in focused_line or indent != 4:
-                continue
+        # Unused for now
+        methods = []
+        decorators = []
 
-            method_name = focused_line.split("def")[1].split("(")[0].strip()
-            does_exist = any([method_name in method.name for method in self._methods])
-            if does_exist:
-                continue
+        for child in node.decorator_list:
+            if isinstance(child, ast.Name):
+                decorators.append(child.id)
+            elif isinstance(child, ast.Call) and hasattr(child.func, "id"):
+                decorators.append(child.func.id)
 
-            arguments_str = focused_line.split("(")[1].split(")")[0]
-            arguments = arguments_str.split(",")
-            view_method = DjangoViewMethod(
-                method_name, arguments, i, possible_status_codes
-            )
-            self._methods.append(view_method)
+        view = DjangoView(node.name, node.bases[0].id, node.lineno, decorators=decorators)
+        view.scan_methods(node)
+        return view
 
 
 class DjangoModelField:
@@ -258,37 +265,12 @@ class DjangoApp:
                 ]
                 self._models.append(DjangoModel(node.name, node.lineno, fields))
 
-    def _extract_views(self, tree):
+    def _extract_views(self, tree: ast.Module) -> List[DjangoView]:
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and any(
-                isinstance(base, ast.Name) and base.id == "APIView"
-                for base in node.bases
-            ):
-                methods = [
-                    DjangoViewMethod(
-                        m.name,
-                        [a.arg for a in m.args.args],
-                        m.lineno,
-                        [
-                            stmt.value.value
-                            for stmt in m.body
-                            if isinstance(stmt, ast.Assign)
-                            and isinstance(stmt.value, ast.Constant)
-                            and hasattr(stmt.targets[0], "id")
-                            and stmt.targets[0].id == "status"
-                        ],
-                    )
-                    for m in node.body
-                    if isinstance(m, ast.FunctionDef)
-                ]
-                self._views.append(
-                    DjangoView(
-                        node.name,
-                        node.bases[0].id,
-                        node.lineno,
-                        methods
-                    )
-                )
+            if isinstance(node, ast.ClassDef):
+                view = DjangoView.from_ast(node)
+                if view:
+                    self._views.append(view)
 
     def _scan_file(self, filename, extractor):
         full_path = os.path.join(self._path, filename)
