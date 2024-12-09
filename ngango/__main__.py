@@ -1,5 +1,6 @@
 import argparse
-from ngango.core import DjangoProject
+from core import DjangoProject
+from tsgen.typescript import ClassNode
 
 # -n "project-name" --path "path_to_project_root" -v "views"
 
@@ -37,6 +38,15 @@ def main():
             print(f"\t{model.name}")
             for field in model.fields:
                 print(f"\t\t{field.name}")
+
+    user_service = ClassNode("UserService") \
+        .add_decorator("Injectable()") \
+        .add_property("users", "User[]", "private", "[]") \
+        .add_method("addUser", "void", [("user", "User")], "this.users.push(user);") \
+        .add_method("getUserById", "User | undefined", [("id", "number")], "return this.users.find(user => user.id === id);")
+
+    with open("../tsgen-output/user.service.ts", "w", encoding="utf8") as f:
+        f.write(user_service.to_ts())
 
 
 if __name__ == "__main__":

@@ -29,36 +29,52 @@ class InterfaceNode(TSNode):
 
 
 class ClassNode(TSNode):
-
     def __init__(self, name):
         super().__init__(name)
+        self.decorators = []
         self.properties = []
         self.methods = []
 
+    def add_decorator(self, decorator):
+        self.decorators.append(decorator)
+        return self
+
     def add_property(self, name, type_, visibility="public", initializer=None):
-        self.properties.append({
-            "name": name,
-            "type": type_,
-            "visibility": visibility,
-            "initializer": initializer,
-        })
+        self.properties.append({"name": name, "type": type_, "visibility": visibility, "initializer": initializer})
         return self
 
     def add_method(self, name, return_type, parameters=None, body=""):
         parameters = parameters or []
-        self.methods.append({
-            "name": name,
-            "return_type": return_type,
-            "parameters": parameters,
-            "body": body,
-        })
+        self.methods.append({"name": name, "return_type": return_type, "parameters": parameters, "body": body})
         return self
 
+    def _generate_decorators(self) -> str:
+        return "\n".join(f"@{decorator}" for decorator in self.decorators)
+
+    def _generate_properties(self) -> str:
+        return "\n".join(
+            f"  {prop['visibility']} {prop['name']}: {prop['type']}" +
+            (f" = {prop['initializer']};" if prop['initializer'] else ";")
+            for prop in self.properties
+        )
+
+    def _generate_methods(self) -> str:
+        return "\n\n".join(
+            f"  {method['name']}(" +
+            ", ".join(f"{param[0]}: {param[1]}" for param in method["parameters"]) +
+            f"): {method['return_type']} {{\n    {method['body']}\n  }}"
+            for method in self.methods
+        )
+
     def to_ts(self) -> str:
-        properties_str = "\n".join(
-            f"  {prop['visibility']} {prop['name']}: {prop['type']}{f' = {prop['initializer']}' if prop['initializer'] else ''};"
-            for prop in self.properties)
-        methods_str = "\n".join(
-            f"  {method['name']}({', '.join([f'{param[0]}: {param[1]}' for param in method['parameters']])}): {method['return_type']} {{\n    {method['body']}\n  }}"
-            for method in self.methods)
-        return f"export class {self.name} {{\n{properties_str}\n\n{methods_str}\n}}"
+        decorators_str = self._generate_decorators()
+        properties_str = self._generate_properties()
+        methods_str = self._generate_methods()
+
+        class_body = "\n\n".join(filter(None, [properties_str, methods_str]))
+        return "\n".join(filter(None, [
+            decorators_str,
+            f"export class {self.name} {{",
+            class_body,
+            "}"
+        ]))

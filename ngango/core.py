@@ -1,8 +1,7 @@
 import ast
 import os
 from typing import List, Optional
-
-from . import file_service as fs
+import file_service as fs
 
 
 class DjangoViewMethod:
@@ -107,7 +106,7 @@ class DjangoView:
             return None
 
         # Unused for now
-        methods = []
+        # methods = []
         decorators = []
 
         for child in node.decorator_list:
@@ -116,12 +115,13 @@ class DjangoView:
             elif isinstance(child, ast.Call) and hasattr(child.func, "id"):
                 decorators.append(child.func.id)
 
-        view = DjangoView(node.name,
-                          node.bases[0].id,
-                          node.lineno,
-                          decorators=decorators)
-        view.scan_methods(node)
-        return view
+        if isinstance(node.bases[0], ast.Name):
+            view = DjangoView(node.name,
+                              node.bases[0].id,
+                              node.lineno,
+                              decorators=decorators)
+            view.scan_methods(node)
+            return view
 
 
 class DjangoModelField:
@@ -279,15 +279,18 @@ class DjangoApp:
                     and isinstance(child.value, ast.Call)
                     and hasattr(child.value.func, "attr")
                 ]
-                self._models.append(DjangoModel(node.name, node.lineno,
+                self._models.append(DjangoModel(node.name,
+                                                node.lineno,
                                                 fields))
 
-    def _extract_views(self, tree: ast.Module) -> List[DjangoView]:
+    def _extract_views(self, tree: ast.Module):
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                view = DjangoView.from_ast(node)
-                if view:
-                    self._views.append(view)
+            if not isinstance(node, ast.ClassDef):
+                continue
+
+            view = DjangoView.from_ast(node)
+            if view:
+                self._views.append(view)
 
     def _scan_file(self, filename, extractor):
         full_path = os.path.join(self._path, filename)
@@ -311,7 +314,7 @@ class DjangoProject:
         self._project_name = project_name
         self._path = path
         self._app_names = fs.folders_containing_file(self.path, "models.py")
-        self._apps = []
+        self._apps: List[DjangoApp] = []
         self._views_filename = views_filename
 
     @property
