@@ -1,10 +1,12 @@
-import os
 import ast
-import file_service as fs
+import os
 from typing import List, Optional
+
+from . import file_service as fs
 
 
 class DjangoViewMethod:
+
     def __init__(
         self,
         name: str,
@@ -41,6 +43,7 @@ class DjangoViewMethod:
 
 
 class DjangoView:
+
     def __init__(
         self,
         name: str,
@@ -86,22 +89,21 @@ class DjangoView:
                 status_codes = []
 
                 for stmt in ast.walk(child):
-                    if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant):
-                        if hasattr(stmt.targets[0], "id") and stmt.targets[0].id == "status":
+                    if isinstance(stmt, ast.Assign) and isinstance(
+                            stmt.value, ast.Constant):
+                        if (hasattr(stmt.targets[0], "id")
+                                and stmt.targets[0].id == "status"):
                             status_codes.append(stmt.value.value)
 
-                method = DjangoViewMethod(
-                    method_name, arguments, child.lineno, status_codes
-                )
+                method = DjangoViewMethod(method_name, arguments, child.lineno,
+                                          status_codes)
                 self._methods.append(method)
 
     @staticmethod
     def from_ast(node: ast.ClassDef):
-        if not any(
-            (isinstance(base, ast.Name) and base.id == "APIView") or
-            (isinstance(base, ast.Attribute) and base.attr == "APIView")
-            for base in node.bases
-        ):
+        if not any((isinstance(base, ast.Name) and base.id == "APIView") or
+                   (isinstance(base, ast.Attribute) and base.attr == "APIView")
+                   for base in node.bases):
             return None
 
         # Unused for now
@@ -114,12 +116,16 @@ class DjangoView:
             elif isinstance(child, ast.Call) and hasattr(child.func, "id"):
                 decorators.append(child.func.id)
 
-        view = DjangoView(node.name, node.bases[0].id, node.lineno, decorators=decorators)
+        view = DjangoView(node.name,
+                          node.bases[0].id,
+                          node.lineno,
+                          decorators=decorators)
         view.scan_methods(node)
         return view
 
 
 class DjangoModelField:
+
     def __init__(self, name: str, field_type: str, params=None):
         self._name = name
         self._field_type = field_type
@@ -144,13 +150,10 @@ class DjangoModelField:
         """
 
         def is_multiline(stripped_line: str) -> bool:
-            return (
-                stripped_line.endswith("(")
-                or stripped_line.endswith("[")
-                or stripped_line.endswith("{")
-                or stripped_line.endswith(",")
-                or stripped_line.endswith("\\")
-            )
+            return (stripped_line.endswith("(") or stripped_line.endswith("[")
+                    or stripped_line.endswith("{")
+                    or stripped_line.endswith(",")
+                    or stripped_line.endswith("\\"))
 
         def is_comment(line: str) -> bool:
             return line.startswith("#") or line.startswith('"""')
@@ -175,6 +178,7 @@ class DjangoModelField:
 
 
 class DjangoModel:
+
     def __init__(
         self,
         name: str,
@@ -221,6 +225,10 @@ class DjangoModel:
 
 
 class DjangoApp:
+    """
+    Likely broken.
+    """
+
     def __init__(self, name, path):
         self._name = name
         self._path = path
@@ -229,18 +237,30 @@ class DjangoApp:
 
     @property
     def name(self) -> str:
+        """
+        App name.
+        """
         return self._name
 
     @property
     def path(self) -> str:
+        """
+        The path to this app's folder.
+        """
         return self._path
 
     @property
     def models(self) -> List[DjangoModel]:
+        """
+        List of DjangoModel objects.
+        """
         return self._models
 
     @property
     def views(self) -> List[DjangoView]:
+        """
+        List of DjangoView objects.
+        """
         return self._views
 
     def _extract_models(self, tree):
@@ -249,21 +269,18 @@ class DjangoApp:
                 continue
 
             if any(
-                (isinstance(base, ast.Name) and base.id == "models.Model") or
-                (isinstance(base, ast.Attribute) and base.attr == "Model")
-                for base in node.bases
-            ):
+                (isinstance(base, ast.Name) and base.id == "models.Model") or (
+                    isinstance(base, ast.Attribute) and base.attr == "Model")
+                    for base in node.bases):
                 fields = [
-                    DjangoModelField(
-                        child.targets[0].id,
-                        child.value.func.attr
-                    )
-                    for child in node.body
-                    if isinstance(child, ast.Assign) and
-                    isinstance(child.value, ast.Call) and
-                    hasattr(child.value.func, "attr")
+                    DjangoModelField(child.targets[0].id,
+                                     child.value.func.attr)
+                    for child in node.body if isinstance(child, ast.Assign)
+                    and isinstance(child.value, ast.Call)
+                    and hasattr(child.value.func, "attr")
                 ]
-                self._models.append(DjangoModel(node.name, node.lineno, fields))
+                self._models.append(DjangoModel(node.name, node.lineno,
+                                                fields))
 
     def _extract_views(self, tree: ast.Module) -> List[DjangoView]:
         for node in ast.walk(tree):
@@ -289,6 +306,7 @@ class DjangoApp:
 
 
 class DjangoProject:
+
     def __init__(self, project_name: str, path: str, views_filename="views"):
         self._project_name = project_name
         self._path = path
