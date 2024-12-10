@@ -7,6 +7,20 @@ from posts.serializers import BoardSerializer, PostSerializer
 
 
 class BoardViewSet(ModelViewSet):
+    """
+    {
+        "ngango": {
+            "service": "Boards",
+            "actions": [
+                "list",
+                "create",
+                "retrieve",
+                "update",
+                "destroy"
+            ]
+        }
+    }
+    """
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
 

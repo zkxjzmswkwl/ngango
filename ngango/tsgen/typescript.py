@@ -62,7 +62,7 @@ class ClassNode(TSNode):
         return self
 
     def add_import(self, module, path):
-        self.imports.append({module, path})
+        self.imports.append((module, path))
 
     def add_property(self, name, type_, visibility="public", initializer=None):
         self.properties.append(
@@ -116,7 +116,6 @@ class ClassNode(TSNode):
         properties_str = self._generate_properties()
         methods_str = self._generate_methods()
         imports_str = self._generate_imports()
-        print(imports_str)
 
         class_body = "\n".join(filter(None, [properties_str, methods_str]))
         return "\n".join(

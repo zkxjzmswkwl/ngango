@@ -8,7 +8,7 @@ from posts.views import BoardViewSet, PostAPIView
 
 router = routers.DefaultRouter()
 router.register(r"members", MemberViewSet)
-router.register(r"boards", BoardViewSet)
+router.register(r"posts", BoardViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

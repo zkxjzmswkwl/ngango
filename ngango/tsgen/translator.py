@@ -69,10 +69,11 @@ class ServiceTranslator:
 
     def _translate_model_viewset_impl(self, view: DjangoView):
         for action in view.actions:
-            print(action)
             # TODO: Check if detail endpoint, if so, 86 the []
+            parameters = []
             return_type = f"Observable<{view.queryset_model}[]>"
             http_method = OPERATION_MAPPINGS.get(action.lower())
+
             if http_method is None:
                 print(f"[!] {action} can not be mapped to an HTTP operation.")
                 return
@@ -80,12 +81,20 @@ class ServiceTranslator:
             if action.lower() == "destroy" or action.lower() == "delete":
                 return_type = "Observable<any>"
 
+            method_body = f"return this.http.{http_method}<{view.queryset_model}[]>" + \
+                          f"(`${{this.url}}/{self.app.name.lower()}/`);"
+
+            if http_method == "post" or http_method == "put":
+                method_body = f"return this.http.{http_method}<{view.queryset_model}>" + \
+                              f"(`${{this.url}}/{self.app.name.lower()}/`, data);"
+                return_type = return_type.replace("[]", "")
+                parameters.append(("data", "{}"))
+
             self._node.add_method(
                 action,
                 return_type,
-                [],
-                f"return this.http.{http_method}<{view.queryset_model}[]>" +
-                "(`${{this.url}}/{self.app.name.lower()}`);"
+                parameters,
+                method_body
             )
 
     def _translate_generic_viewset_impl(self, view: DjangoView):
@@ -95,7 +104,6 @@ class ServiceTranslator:
         pass
 
     def _generate_methods(self, view: DjangoView):
-        print(view.parent_class)
         if view.parent_class == "ModelViewSet":
             self._translate_model_viewset_impl(view)
         elif view.parent_class == "GenericViewSet":
@@ -114,7 +122,7 @@ class ServiceTranslator:
     def translate(self):
         self._insert_imports()
         if self._injectable:
-            self._node.add_decorator("Injectable()")
+            self._node.add_decorator("Injectable({providedIn: 'root'})")
 
         self._node.add_property("url",
                                 "string",
@@ -126,7 +134,9 @@ class ServiceTranslator:
                                 "HttpClient",
                                 "private",
                                 "inject(HttpClient)")
-        self._node.add_property("store", "Store", "private", "inject(Store)")
+
+        if self._use_store:
+            self._node.add_property("store", "Store", "private", "inject(Store)")
 
         for view in self._app.views:
             self._generate_methods(view)

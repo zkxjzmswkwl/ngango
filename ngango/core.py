@@ -121,7 +121,6 @@ class DjangoView:
             return
 
         for child in node.body:
-            print("1")
             if (
                 isinstance(child, ast.Expr) and
                 isinstance(child.value, ast.Constant)
@@ -247,7 +246,6 @@ class DjangoModelField:
         name = stripped_line.split("=")[0]
         field_type = stripped_line.split("=")[1].split("(")[0].strip()
         params = stripped_line.split("(")[1].split(")")[0].split(",")
-        print(params)
         return DjangoModelField(name, field_type, params)
 
     def __str__(self):

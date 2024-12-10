@@ -1,0 +1,10 @@
+{
+    "frontend": {
+        "path": "C:/users/owcar/personal/opensource/ngango/dummyproject/ng-board",
+        "output_destinations": {
+            "services": "src/app/services",
+            "components": "src/app/components",
+            "models": "src/app/models"
+        }
+    }
+}
