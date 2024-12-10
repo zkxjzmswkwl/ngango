@@ -1,4 +1,5 @@
 import ast
+import json
 import os
 from typing import List, Optional
 import file_service as fs
@@ -61,6 +62,7 @@ class DjangoView:
         self._line_number = line_number
         self._methods = methods or []
         self._decorators = decorators or []
+        self._actions: List[str] = []
 
     @property
     def name(self) -> str:
@@ -86,6 +88,10 @@ class DjangoView:
     def decorators(self) -> List:
         return self._decorators
 
+    @property
+    def actions(self) -> List[str]:
+        return self._actions
+
     def scan_methods(self, node: ast.ClassDef):
         for child in node.body:
             if isinstance(child, ast.FunctionDef):
@@ -108,6 +114,24 @@ class DjangoView:
                     method_name, arguments, child.lineno, status_codes
                 )
                 self._methods.append(method)
+
+    def parse_docstring(self, node: ast.ClassDef):
+        if len(self._actions) != 0:
+            print(f"[!] self._actions of class {self.__class__.__name__} is not empty.")
+            return
+
+        for child in node.body:
+            print("1")
+            if (
+                isinstance(child, ast.Expr) and
+                isinstance(child.value, ast.Constant)
+            ):
+                value_str = child.value.s
+                if value_str:
+                    blob = json.loads(value_str.replace("\n", ""))
+                    ngango = blob.get("ngango", None)
+                    if ngango:
+                        self._actions = ngango.get("actions", [])
 
     @staticmethod
     def from_ast(node: ast.ClassDef):
@@ -151,6 +175,7 @@ class DjangoView:
                                       node.lineno,
                                       decorators=decorators)
                     view.scan_methods(node)
+                    view.parse_docstring(node)
                     return view
 
     def __str__(self):

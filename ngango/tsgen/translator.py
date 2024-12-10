@@ -14,6 +14,13 @@ TYPE_MAPPINGS = {
     # TODO: Could be another object entirely.
     "ForeignKey": "number",
 }
+OPERATION_MAPPINGS = {
+    "list": "get",
+    "create": "post",
+    "retrieve": "get",
+    "update": "put",
+    "destroy": "delete",
+}
 API_URL = "http://localhost:8000/api"
 
 
@@ -61,13 +68,25 @@ class ServiceTranslator:
         return self._use_store
 
     def _translate_model_viewset_impl(self, view: DjangoView):
-        self._node.add_method(
-            "list",
-            "Observable<" + view.queryset_model + "[]>",
-            [],
-            f"return this.http.get<{view.queryset_model}[]>" +
-            "(`${{this.url}}/{self.app.name.lower()}`);"
-        )
+        for action in view.actions:
+            print(action)
+            # TODO: Check if detail endpoint, if so, 86 the []
+            return_type = f"Observable<{view.queryset_model}[]>"
+            http_method = OPERATION_MAPPINGS.get(action.lower())
+            if http_method is None:
+                print(f"[!] {action} can not be mapped to an HTTP operation.")
+                return
+
+            if action.lower() == "destroy" or action.lower() == "delete":
+                return_type = "Observable<any>"
+
+            self._node.add_method(
+                action,
+                return_type,
+                [],
+                f"return this.http.{http_method}<{view.queryset_model}[]>" +
+                "(`${{this.url}}/{self.app.name.lower()}`);"
+            )
 
     def _translate_generic_viewset_impl(self, view: DjangoView):
         pass

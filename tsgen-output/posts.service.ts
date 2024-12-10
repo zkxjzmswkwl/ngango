@@ -1,6 +1,6 @@
 import { @angular/core } from 'inject, Injectable';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { @angular/common/http } from 'HttpClient';
+import { rxjs } from 'Observable';
 
 
 @Injectable()
@@ -9,7 +9,4 @@ export class PostsService {
   private http: HttpClient = inject(HttpClient);
   private store: Store = inject(Store);
 
-  list(): Observable<Board[]> {
-    return this.http.get<Board[]>(`${this.url}/posts`);
-  }
 }

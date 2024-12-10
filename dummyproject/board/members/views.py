@@ -10,14 +10,16 @@ from members.serializers import MemberSerializer
 
 class MemberViewSet(ModelViewSet):
     """
-    @ngango {
-        service: Members,
-        actions: {
-            list,
-            create,
-            retrieve,
-            update,
-            destroy
+    {
+        "ngango": {
+            "service": "Members",
+            "actions": [
+                "list",
+                "create",
+                "retrieve",
+                "update",
+                "destroy"
+            ]
         }
     }
     """
@@ -28,10 +30,11 @@ class MemberViewSet(ModelViewSet):
 class MemberProfile(APIView):
     queryset = Member.objects.all()
     """
-    @ngango {
-        service: Members,
-        actions: {
-            profile
+    {
+        "ngango": {
+            "service": "Members",
+            "actions": [
+            ]
         }
     }
     """

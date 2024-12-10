@@ -1,0 +1,6 @@
+{
+  "ngango": {
+    "service": "Members",
+    "actions": ["list", "create", "retrieve", "update", "destroy"]
+  }
+}
