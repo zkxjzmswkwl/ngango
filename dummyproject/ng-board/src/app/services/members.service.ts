@@ -1,7 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Member } from '../models/members.struct';
 
 
 @Injectable({providedIn: 'root'})
@@ -15,10 +14,6 @@ export class MembersService {
 
   create(data: {}): Observable<Member> {
     return this.http.post<Member>(`${this.url}/members/`, data);
-  }
-
-  retrieve(): Observable<Member[]> {
-    return this.http.get<Member[]>(`${this.url}/members/`);
   }
 
   update(data: {}): Observable<Member> {

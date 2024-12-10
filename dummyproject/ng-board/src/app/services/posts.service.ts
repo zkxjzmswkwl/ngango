@@ -17,10 +17,6 @@ export class PostsService {
     return this.http.post<Board>(`${this.url}/posts/`, data);
   }
 
-  retrieve(): Observable<Board[]> {
-    return this.http.get<Board[]>(`${this.url}/posts/`);
-  }
-
   update(data: {}): Observable<Board> {
     return this.http.put<Board>(`${this.url}/posts/`, data);
   }

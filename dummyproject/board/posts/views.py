@@ -14,7 +14,6 @@ class BoardViewSet(ModelViewSet):
             "actions": [
                 "list",
                 "create",
-                "retrieve",
                 "update",
                 "destroy"
             ]

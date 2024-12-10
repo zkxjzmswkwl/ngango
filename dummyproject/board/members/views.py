@@ -16,7 +16,6 @@ class MemberViewSet(ModelViewSet):
             "actions": [
                 "list",
                 "create",
-                "retrieve",
                 "update",
                 "destroy"
             ]

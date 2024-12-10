@@ -1,26 +1,7 @@
 from core import DjangoApp, DjangoModel, DjangoView
 from tsgen.typescript import ClassNode, InterfaceNode
+from tsgen.mappings import TYPE_MAPPINGS, OPERATION_MAPPINGS
 
-TYPE_MAPPINGS = {
-    "CharField": "string",
-    "TextField": "string",
-    "IntegerField": "number",
-    "BooleanField": "boolean",
-    # DateTimeField is serialized to a string in almost every use case
-    "DateTimeField": "string",
-    "DateField": "Date",
-    "TimeField": "Date",
-    # TODO: Depends on the serializer used.
-    # TODO: Could be another object entirely.
-    "ForeignKey": "number",
-}
-OPERATION_MAPPINGS = {
-    "list": "get",
-    "create": "post",
-    "retrieve": "get",
-    "update": "put",
-    "destroy": "delete",
-}
 API_URL = "http://localhost:8000/api"
 
 
